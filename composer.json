@@ -1,0 +1,10 @@
+{
+  "name": "su-sws/node_revision_delete",
+  "description": "Deletes node revisions during cron.",
+  "type": "drupal-custom-module",
+  "homepage": "https://github.com/SU-SWS/node_revision_delete",
+  "authors": [],
+  "license": "GPL-2.0+",
+  "minimum-stability": "dev",
+  "require": {}
+}

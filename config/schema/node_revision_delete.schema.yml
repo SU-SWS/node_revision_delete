@@ -1,0 +1,10 @@
+node_revision_delete.settings:
+  type: mapping
+  mapping:
+    cron_limit:
+      type: integer
+      label: 'Cron limit: number to delete during cron.'
+    node_types:
+      type: sequence
+      label: 'Node types'
+

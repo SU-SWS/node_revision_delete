@@ -1,0 +1,15 @@
+<?php
+
+/**
+ * Implements hook_help().
+ */
+function node_revision_delete_help($route_name, \Drupal\Core\Routing\RouteMatchInterface $route_match) {
+
+}
+
+/**
+ * Implements hook_cron().
+ */
+function node_revision_delete_cron() {
+   \Drupal::service('node_revision_delete')->deleteRevisions();
+}

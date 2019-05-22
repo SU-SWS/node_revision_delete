@@ -1,0 +1,7 @@
+name: Node Revision Delete
+type: module
+description: 'Deletes old node revisions'
+core: 8.x
+package: Stanford
+version: 8.x-1.x
+

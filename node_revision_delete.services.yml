@@ -1,0 +1,5 @@
+services:
+  node_revision_delete:
+    class: '\Drupal\node_revision_delete\RevisionCleanup'
+    arguments: ['@database', '@entity_type.manager', '@logger.factory', '@config.factory']
+
