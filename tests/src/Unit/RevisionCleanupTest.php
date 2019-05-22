@@ -46,7 +46,11 @@ class RevisionCleanupTest extends UnitTestCase {
   }
 
   public function configGetCallback($arg) {
-
+    switch ($arg) {
+      case 'node_types':
+        return [];
+        break;
+    }
   }
 
   /**
@@ -85,12 +89,7 @@ class RevisionCleanupTest extends UnitTestCase {
     $logger_factory->method('get')->willReturn($logger);
 
     $config = $this->createMock(Config::class);
-    $config->method('get')->willReturn([
-      [
-        'entity_type' => 'node',
-        'keep' => 2,
-      ],
-    ]);
+    $config->method('get')->willReturnCallback([$this, 'configGetCallback']);
     $config_factory = $this->createMock(ConfigFactoryInterface::class);
     $config_factory->method('get')->willReturn($config);
 
