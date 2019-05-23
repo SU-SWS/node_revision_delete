@@ -71,12 +71,14 @@ class RevisionCleanup implements RevisionCleanupInterface {
     $deleted_count = 0;
     foreach ($this->config->get('node_types') as $bundle => $settings) {
       $revision_ids = [];
+      $keep = $settings['keep'] ?? 1;
+
       switch ($settings['method']) {
         case self::NODE_REVISION_DELETE_COUNT:
-          $revision_ids = $this->getRevisionIds($bundle, $settings['keep']);
+          $revision_ids = $this->getRevisionIds($bundle, $keep);
           break;
         case self::NODE_REVISION_DELETE_AGE:
-          $revision_ids = $this->getRevisionIds($bundle, $settings['keep'], $settings['changed']);
+          $revision_ids = $this->getRevisionIds($bundle, $keep, $settings['age']);
           break;
       }
 
@@ -168,10 +170,10 @@ class RevisionCleanup implements RevisionCleanupInterface {
       $revision_ids[$item['nid']][$item['vid']] = $item;
     }
 
-    if ($keep > 0) {
+    if ($keep - 1 > 0) {
       // Slice the revision ids to keep only the number of revisions we want.
       foreach ($revision_ids as &$ids) {
-        $ids = array_slice($ids, 0, -$keep, TRUE);
+        $ids = array_slice($ids, 0, -($keep - 1), TRUE);
       }
     }
 
