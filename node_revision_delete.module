@@ -1,15 +1,38 @@
 <?php
 
 /**
+ * @file
+ * node_revision_delete.module
+ */
+
+use Drupal\Core\Routing\RouteMatchInterface;
+use Drupal\Core\Url;
+use Drupal\Core\Link;
+
+/**
  * Implements hook_help().
  */
-function node_revision_delete_help($route_name, \Drupal\Core\Routing\RouteMatchInterface $route_match) {
+function node_revision_delete_help($route_name, RouteMatchInterface $route_match) {
+  switch ($route_name) {
+    // Main module help for the hs_migrate module.
+    case 'help.page.hs_migrate':
 
+      $url = Url::fromUri('https://www.drupal.org/project/node_revision_delete/issues/2808383');
+      $link = Link::fromTextAndUrl(t('this thread'), $url);
+
+      $output = '';
+      $output .= '<h3>' . t('About') . '</h3>';
+      $output .= '<p>' . t('Adds more functionality to migrate and migrate plus modules') . '</p>';
+      $output .= '<p>' . t('This module will become obsolete when all the issues in @link will be closed', ['@link' => (string) $link->toString()]) . '</p>';
+      return $output;
+
+    default:
+  }
 }
 
 /**
  * Implements hook_cron().
  */
 function node_revision_delete_cron() {
-   \Drupal::service('node_revision_delete')->deleteRevisions();
+  \Drupal::service('node_revision_delete')->deleteRevisions();
 }

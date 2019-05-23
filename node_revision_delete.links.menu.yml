@@ -1,0 +1,5 @@
+node_revision_delete.config_form:
+  title: 'Node Revision Delete'
+  route_name: node_revision_delete.config_form
+  description: 'Change settings for revision cleanup'
+  parent: system.admin_config_content
