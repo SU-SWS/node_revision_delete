@@ -72,11 +72,7 @@ class NodeRevisionDeleteConfigForm extends ConfigFormBase {
     ];
 
     foreach ($this->bundleInfo->getBundleInfo('node') as $bundle => $label) {
-      $visible_state = [
-        'visible' => [
-          ":input[name=\"node_types[$bundle][enabled]\"]" => ['checked' => TRUE],
-        ],
-      ];
+
       $form['node_types'][$bundle] = [
         '#type' => 'fieldset',
         '#title' => $label['label'],
@@ -94,14 +90,22 @@ class NodeRevisionDeleteConfigForm extends ConfigFormBase {
           RevisionCleanupInterface::NODE_REVISION_DELETE_AGE => $this->t('Age'),
         ],
         '#default_value' => $config_settings->get("node_types.$bundle.method"),
-        '#states' => $visible_state,
+        '#states' => [
+          'visible' => [
+            ":input[name=\"node_types[$bundle][enabled]\"]" => ['checked' => TRUE],
+          ],
+        ],
       ];
       $form['node_types'][$bundle]['keep'] = [
         '#type' => 'number',
         '#title' => $this->t('Revisions to Keep'),
         '#description' => $this->t('Always keep the given number of revisions.'),
-        '#default_value' => $config_settings->get("node_types.$bundle.keep"),
-        '#states' => $visible_state,
+        '#default_value' => $config_settings->get("node_types.$bundle.keep") ?: 3,
+        '#states' => [
+          'visible' => [
+            ":input[name=\"node_types[$bundle][enabled]\"]" => ['checked' => TRUE],
+          ],
+        ],
       ];
       $form['node_types'][$bundle]['age'] = [
         '#type' => 'textfield',
@@ -109,10 +113,38 @@ class NodeRevisionDeleteConfigForm extends ConfigFormBase {
         '#description' => $this->t('Relative age to delete items. ie "2 weeks" will delete any revision that becomes 2 weeks old'),
         '#size' => 15,
         '#default_value' => $config_settings->get("node_types.$bundle.age"),
-        '#states' => $visible_state,
+        '#element_validate' => [[$this, 'validateAgeField']],
+        '#states' => [
+          'visible' => [
+            ":input[name=\"node_types[$bundle][enabled]\"]" => ['checked' => TRUE],
+            ":input[name=\"node_types[$bundle][method]\"]" => ['value' => RevisionCleanupInterface::NODE_REVISION_DELETE_AGE],
+          ],
+        ],
       ];
     }
     return $form;
+  }
+
+  /**
+   * Validate age field for valid format.
+   *
+   * @param $element
+   *   Form element.
+   * @param \Drupal\Core\Form\FormStateInterface $form_state
+   *   Current form state object.
+   */
+  public function validateAgeField(array $element, FormStateInterface $form_state) {
+    $path = array_slice($element['#parents'], 0, 2);
+    $settings = $form_state->getValue($path);
+
+    if (!$settings['enabled'] || $settings['method'] != RevisionCleanupInterface::NODE_REVISION_DELETE_AGE) {
+      $form_state->setValueForElement($element, '');
+      return;
+    }
+
+    if (!strtotime($settings['age'])) {
+      $form_state->setError($element, $this->t('Invalid age format'));
+    }
   }
 
   /**
