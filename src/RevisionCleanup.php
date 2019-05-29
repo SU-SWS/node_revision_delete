@@ -142,6 +142,7 @@ class RevisionCleanup implements RevisionCleanupInterface {
    * Get all revision ids for the entity type that are not CURRENT revisions.
    *
    * @param string $bundle
+   *   Node bundle id.
    *
    * @return array
    *   Keyed array of entity ids and its revision ids.
