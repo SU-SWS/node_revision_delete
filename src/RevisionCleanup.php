@@ -7,6 +7,7 @@ use Drupal\Core\Database\Connection;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Logger\LoggerChannelFactoryInterface;
 use Drupal\Core\StringTranslation\StringTranslationTrait;
+use Drupal\node\NodeInterface;
 
 /**
  * Service to delete old revisions on entity types.
@@ -67,75 +68,39 @@ class RevisionCleanup implements RevisionCleanupInterface {
   /**
    * {@inheritDoc}
    */
-  public function deleteRevisions() {
-    $deleted_count = 0;
-    foreach ($this->config->get('node_types') as $bundle => $settings) {
-      $revision_ids = [];
-      $keep = $settings['keep'] ?? 1;
-
-      switch ($settings['method']) {
-        case self::NODE_REVISION_DELETE_COUNT:
-          $revision_ids = $this->getRevisionIds($bundle, $keep);
-          break;
-        case self::NODE_REVISION_DELETE_AGE:
-          $revision_ids = $this->getRevisionIds($bundle, $keep, $settings['age']);
-          break;
-      }
-
-      $deleted_count = $this->deleteEntityRevisions($revision_ids);
-      if ($deleted_count >= $this->getCronLimit()) {
-        break;
-      }
-    }
-
-    if ($deleted_count) {
-      $this->logger->info('Deleted @count node revisions', ['@count' => $deleted_count]);
+  public function deleteRevision($nid, $vid) {
+    // Make sure the given revision id should be deleted.
+    if ($this->shouldDeleteRevision($nid, $vid)) {
+      $this->entityTypeManager->getStorage('node')
+        ->deleteRevision($vid);
     }
   }
 
   /**
-   * Get the number of revisions to limit cron to delete.
+   * Should the provided revision id on the node be deleted.
    *
-   * @return int
-   *   Total number to delete.
+   * @param int $nid
+   *   Node ID.
+   * @param int $vid
+   *   Revision ID.
+   *
+   * @return bool
+   *   True if the revision can be deleted.
+   *
+   * @throws \Drupal\Component\Plugin\Exception\InvalidPluginDefinitionException
+   * @throws \Drupal\Component\Plugin\Exception\PluginNotFoundException
    */
-  protected function getCronLimit() {
-    return $this->config->get('cron_limit') ?: 50;
-  }
-
-  /**
-   * Delete all old revisions of the given entity type.
-   *
-   * @param array $revision_ids
-   *   Entity type id.
-   *
-   * @return int
-   */
-  protected function deleteEntityRevisions($revision_ids) {
-
-    $deleted_items = 0;
-    // Loop trough all entity ids and delete it's applicable keys.
-    foreach ($revision_ids as $entity_id => $revisions) {
-
-      foreach (array_keys($revisions) as $revision_id) {
-        try {
-          $this->entityTypeManager->getStorage('node')
-            ->deleteRevision($revision_id);
-        }
-        catch (\Exception $e) {
-          $this->logger->error('Unable to delete revision @rid. Error: @message', [
-            '@rid' => $revision_id,
-            '@message' => $e->getMessage(),
-          ]);
-        }
-
-        $deleted_items++;
-        if ($deleted_items >= $this->getCronLimit()) {
-          return $deleted_items;
-        }
-      }
+  protected function shouldDeleteRevision($nid, $vid) {
+    $node = $this->entityTypeManager->getStorage('node')->load($nid);
+    if (!$node) {
+      return FALSE;
     }
-    return $deleted_items;
+
+    $keep = $this->config->get("node_types.{$node->getType()}.keep");
+    $age = $this->config->get("node_types.{$node->getType()}.age");
+    $revision_ids = $this->getRevisionIds($node->getType(), $keep, $age, $node->id());
+
+    return isset($revision_ids[$nid][$vid]);
   }
 
   /**
@@ -143,13 +108,21 @@ class RevisionCleanup implements RevisionCleanupInterface {
    *
    * @param string $bundle
    *   Node bundle id.
+   * @param int $keep
+   *   Number of revisions to keep.
+   * @param string $changed
+   *   Relative time string.
+   * @param int $nid
+   *   Node id.
    *
    * @return array
    *   Keyed array of entity ids and its revision ids.
    */
-  protected function getRevisionIds($bundle, $keep = 0, $changed = '') {
+  protected function getRevisionIds($bundle, $keep = 0, $changed = '', $nid = NULL) {
     // Query on the revision table for the entity type.
-    $query = $this->database->select('node_field_revision', 'r')->fields('r');
+    $query = $this->database->select('node_field_revision', 'r')
+      ->fields('r', ['nid', 'vid'])
+      ->fields('b', ['type']);
 
     // Join the base table so that we can exclude the current revision.
     $query->join('node_field_data', 'b', "b.nid = r.nid");
@@ -163,6 +136,10 @@ class RevisionCleanup implements RevisionCleanupInterface {
     if ($changed) {
       $timestamp = strtotime("-$changed");
       $query->where("r.changed <= $timestamp");
+    }
+
+    if ($nid) {
+      $query->where("r.nid = $nid");
     }
 
     $result = $query->execute();
@@ -179,6 +156,61 @@ class RevisionCleanup implements RevisionCleanupInterface {
     }
 
     return array_filter($revision_ids);
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  public function queueRevisionsForNode(NodeInterface $node) {
+    if (empty($node->id()) || empty($this->config->get("node_types.{$node->getType()}"))) {
+      return;
+    }
+
+    $keep = $this->config->get("node_types.{$node->getType()}.keep");
+    $age = $this->config->get("node_types.{$node->getType()}.age");
+    $revision_ids = $this->getRevisionIds($node->getType(), $keep, $age, $node->id());
+
+    if (isset($revision_ids[$node->id()])) {
+      foreach (array_keys($revision_ids[$node->id()]) as $revision_id) {
+        self::queueRevision($node->id(), $revision_id);
+      }
+    }
+  }
+
+  /**
+   * {@inheritDoc}
+   */
+  public function queueAllRevisions() {
+    $this->database->delete('queue')
+      ->condition('name', 'node_revision_delete')
+      ->execute();
+
+    foreach ($this->config->get('node_types') as $node_type => $settings) {
+      foreach ($this->getRevisionIds($node_type, $settings['keep'], $settings['age']) as $node_id => $revisions) {
+        foreach (array_keys($revisions) as $revision_id) {
+          self::queueRevision($node_id, $revision_id);
+        }
+      }
+    }
+  }
+
+  /**
+   * Create a cron queue item from the given data.
+   *
+   * @param int $nid
+   *   Node ID.
+   * @param int $vid
+   *   Revision ID.
+   */
+  protected static function queueRevision($nid, $vid) {
+    /** @var \Drupal\Core\Queue\QueueFactory $queue_factory */
+    $queue_factory = \Drupal::service('queue');
+    /** @var \Drupal\Core\Queue\QueueInterface $queue */
+    $queue = $queue_factory->get('node_revision_delete');
+    $item = new \stdClass();
+    $item->nid = $nid;
+    $item->vid = $vid;
+    $queue->createItem($item);
   }
 
 }

@@ -22,21 +22,30 @@ class NodeRevisionDeleteConfigForm extends ConfigFormBase {
   protected $bundleInfo;
 
   /**
+   * Revision Cleanup Service.
+   *
+   * @var \Drupal\node_revision_delete\RevisionCleanupInterface
+   */
+  protected $revisionCleanup;
+
+  /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container) {
     return new static(
       $container->get('config.factory'),
-      $container->get('entity_type.bundle.info')
+      $container->get('entity_type.bundle.info'),
+      $container->get('node_revision_delete')
     );
   }
 
   /**
    * {@inheritdoc}
    */
-  public function __construct(ConfigFactoryInterface $config_factory, EntityTypeBundleInfoInterface $bundle_info) {
+  public function __construct(ConfigFactoryInterface $config_factory, EntityTypeBundleInfoInterface $bundle_info, RevisionCleanupInterface $revision_cleanup) {
     parent::__construct($config_factory);
     $this->bundleInfo = $bundle_info;
+    $this->revisionCleanup = $revision_cleanup;
   }
 
   /**
@@ -59,13 +68,7 @@ class NodeRevisionDeleteConfigForm extends ConfigFormBase {
   public function buildForm(array $form, FormStateInterface $form_state) {
     $form = parent::buildForm($form, $form_state);
     $config_settings = $this->config('node_revision_delete.settings');
-    $form['cron_limit'] = [
-      '#type' => 'number',
-      '#title' => $this->t('Cron Limit'),
-      '#description' => $this->t('Number of revisions to delete during cron'),
-      '#default_value' => $config_settings->get('cron_limit'),
-      '#required' => TRUE,
-    ];
+
     $form['node_types'] = [
       '#type' => 'container',
       '#tree' => TRUE,
@@ -128,7 +131,7 @@ class NodeRevisionDeleteConfigForm extends ConfigFormBase {
   /**
    * Validate age field for valid format.
    *
-   * @param $element
+   * @param array $element
    *   Form element.
    * @param \Drupal\Core\Form\FormStateInterface $form_state
    *   Current form state object.
@@ -152,7 +155,6 @@ class NodeRevisionDeleteConfigForm extends ConfigFormBase {
    */
   public function submitForm(array &$form, FormStateInterface $form_state) {
     $config_settings = $this->config('node_revision_delete.settings');
-    $config_settings->set('cron_limit', $form_state->getValue('cron_limit'));
     $node_types = $form_state->getValue('node_types');
 
     $node_types = array_filter($node_types, function ($node_settings) {
@@ -165,6 +167,8 @@ class NodeRevisionDeleteConfigForm extends ConfigFormBase {
     $config_settings->set('node_types', $node_types);
     $config_settings->save();
     $this->messenger()->addStatus($this->t('Settings saved successfully.'));
+
+    $this->revisionCleanup->queueAllRevisions();
   }
 
 }

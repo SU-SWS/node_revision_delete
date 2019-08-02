@@ -2,6 +2,8 @@
 
 namespace Drupal\node_revision_delete;
 
+use Drupal\node\NodeInterface;
+
 /**
  * Interface RevisionCleanupInterface.
  *
@@ -20,8 +22,26 @@ interface RevisionCleanupInterface {
   const NODE_REVISION_DELETE_COUNT = 'count';
 
   /**
-   * Delete all revisions for the configured entity types.
+   * Delete a specific revision
+   *
+   * @param int $nid
+   *   Node ID.
+   * @param int $vid
+   *   Revision ID.
    */
-  public function deleteRevisions();
+  public function deleteRevision($nid, $vid);
+
+  /**
+   * Queue any revisions for the provided node to be deleted.
+   *
+   * @param \Drupal\node\NodeInterface $node
+   *   Node entity object.
+   */
+  public function queueRevisionsForNode(NodeInterface $node);
+
+  /**
+   * Query the database and queue up every revision for possible deletion.
+   */
+  public function queueAllRevisions();
 
 }

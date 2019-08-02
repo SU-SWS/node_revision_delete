@@ -1,0 +1,13 @@
+<?php
+
+/**
+ * @file
+ * node_revision_delete.install
+ */
+
+/**
+ * Implements hook_install().
+ */
+function node_revision_delete_install() {
+  \Drupal::service('node_revision_delete')->queueAllRevisions();
+}

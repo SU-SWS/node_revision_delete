@@ -23,6 +23,7 @@ class RevisionCleanupTest extends KernelTestBase {
     'node',
     'node_revision_delete',
     'user',
+    'test_node_revision_delete',
   ];
 
   /**
@@ -33,12 +34,20 @@ class RevisionCleanupTest extends KernelTestBase {
   protected $node;
 
   /**
+   * Node Revision delete service.
+   *
+   * @var RevisionCleanupInterface
+   */
+  protected $revisionCleanup;
+
+  /**
    * {@inheritdoc}
    */
   protected function setUp() {
     parent::setUp();
     $this->installEntitySchema('node');
     $this->installEntitySchema('user');
+    $this->installConfig('test_node_revision_delete');
 
     NodeType::create([
       'type' => 'article',
@@ -53,6 +62,7 @@ class RevisionCleanupTest extends KernelTestBase {
     $this->node->setChangedTime(strtotime('-1 year'));
     $this->node->setCreatedTime(strtotime('-1 year'));
     $this->node->save();
+
     for ($i = 1; $i < 12; $i++) {
       $this->node->set('title', $this->randomString());
       $this->node->setNewRevision();
@@ -60,17 +70,6 @@ class RevisionCleanupTest extends KernelTestBase {
       $this->node->setChangedTime($changed_time);
       $this->node->save();
     }
-
-    $this->installConfig('node_revision_delete');
-    $config_settings = [
-      'article' => [
-        'method' => RevisionCleanupInterface::NODE_REVISION_DELETE_COUNT,
-        'keep' => 5,
-      ],
-    ];
-    $this->config('node_revision_delete.settings')
-      ->set('node_types', $config_settings)
-      ->save();
   }
 
   /**
@@ -78,42 +77,28 @@ class RevisionCleanupTest extends KernelTestBase {
    */
   public function testCountCleanup() {
     $this->assertEquals(12, $this->getRevisionCount());
-    \Drupal::service('node_revision_delete')->deleteRevisions();
-    $this->assertEquals(5, $this->getRevisionCount());
-    \Drupal::service('node_revision_delete')->deleteRevisions();
-    $this->assertEquals(5, $this->getRevisionCount());
+    $this->processQueueItems();
+    $this->assertEquals(6, $this->getRevisionCount());
+    $this->processQueueItems();
+    $this->assertEquals(6, $this->getRevisionCount());
   }
 
   /**
+   * Run through cron queue items.
+   *
+   * @throws \Exception
    */
-  public function testCronLimit() {
-    $this->config('node_revision_delete.settings')
-      ->set('cron_limit', 2)
-      ->save();
+  protected function processQueueItems() {
+    /** @var \Drupal\Core\Queue\QueueInterface $queue */
+    $queue = \Drupal::queue('node_revision_delete');
+    /** @var \Drupal\Core\Queue\QueueWorkerInterface $queue_worker */
+    $queue_worker = \Drupal::service('plugin.manager.queue_worker')
+      ->createInstance('node_revision_delete');
 
-    $this->assertEquals(12, $this->getRevisionCount());
-    \Drupal::service('node_revision_delete')->deleteRevisions();
-    $this->assertEquals(10, $this->getRevisionCount());
-    \Drupal::service('node_revision_delete')->deleteRevisions();
-    $this->assertEquals(8, $this->getRevisionCount());
-  }
-
-  public function testAgeCleanup() {
-    $config_settings = [
-      'article' => [
-        'method' => RevisionCleanupInterface::NODE_REVISION_DELETE_AGE,
-        'age' => '1 month',
-      ],
-    ];
-    $this->config('node_revision_delete.settings')
-      ->set('node_types', $config_settings)
-      ->save();
-
-    $this->assertEquals(12, $this->getRevisionCount());
-    \Drupal::service('node_revision_delete')->deleteRevisions();
-    $this->assertEquals(1, $this->getRevisionCount());
-    \Drupal::service('node_revision_delete')->deleteRevisions();
-    $this->assertEquals(1, $this->getRevisionCount());
+    while ($item = $queue->claimItem()) {
+      $queue_worker->processItem($item->data);
+      $queue->deleteItem($item);
+    }
   }
 
   /**

@@ -1,0 +1,8 @@
+name: 'Testing Node Revision Delete'
+type: module
+version: VERSION
+core: 8.x
+hidden: true
+dependencies:
+  - node_revision_delete
+

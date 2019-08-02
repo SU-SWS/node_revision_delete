@@ -1,0 +1,5 @@
+node_types:
+  article:
+    method: count
+    keep: 5
+    age: ''

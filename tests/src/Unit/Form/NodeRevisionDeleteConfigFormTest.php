@@ -34,7 +34,6 @@ class NodeRevisionDeleteConfigFormTest extends UnitTestCase {
 
     $config = [
       'node_revision_delete.settings' => [
-        'cron_limit' => 23,
         'node_types' => [
           'article' => [
             'method' => RevisionCleanupInterface::NODE_REVISION_DELETE_AGE,
@@ -50,6 +49,7 @@ class NodeRevisionDeleteConfigFormTest extends UnitTestCase {
       ],
     ];
 
+    $container->set('node_revision_delete', $this->createMock(RevisionCleanupInterface::class));
     $container->set('config.factory', $this->getConfigFactoryStub($config));
     $container->set('entity_type.bundle.info', $this->getBundleInfoStub());
     $container->set('string_translation', $this->getStringTranslationStub());
@@ -67,8 +67,6 @@ class NodeRevisionDeleteConfigFormTest extends UnitTestCase {
     $form = [];
     $form_state = new FormState();
     $form = $this->formObject->buildForm($form, $form_state);
-
-    $this->assertEquals(23, $form['cron_limit']['#default_value']);
 
     $this->assertTrue($form['node_types']['article']['enabled']['#default_value']);
     $this->assertEquals(RevisionCleanupInterface::NODE_REVISION_DELETE_AGE, $form['node_types']['article']['method']['#default_value']);
@@ -116,7 +114,6 @@ class NodeRevisionDeleteConfigFormTest extends UnitTestCase {
     $form_state = new FormState();
 
     $submitted_values = [
-      'cron_limit' => 45,
       'node_types' => [
         'article' => ['enabled' => FALSE],
         'page' => [

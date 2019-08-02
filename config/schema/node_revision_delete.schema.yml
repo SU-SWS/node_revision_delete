@@ -6,9 +6,6 @@ node_revision_delete.settings:
       label: 'Language code'
     _core:
       type: _core_config_info
-    cron_limit:
-      type: integer
-      label: 'Cron limit: number to delete during cron.'
     node_types:
       type: sequence
       label: 'Node types'
