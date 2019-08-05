@@ -5,6 +5,7 @@ namespace Drupal\Tests\Kernel\Form;
 use Drupal\Core\DependencyInjection\ContainerBuilder;
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Form\FormState;
+use Drupal\Core\Queue\QueueFactory;
 use Drupal\node_revision_delete\Form\NodeRevisionDeleteConfigForm;
 use Drupal\node_revision_delete\RevisionCleanupInterface;
 use Drupal\Tests\UnitTestCase;
@@ -53,6 +54,7 @@ class NodeRevisionDeleteConfigFormTest extends UnitTestCase {
     $container->set('config.factory', $this->getConfigFactoryStub($config));
     $container->set('entity_type.bundle.info', $this->getBundleInfoStub());
     $container->set('string_translation', $this->getStringTranslationStub());
+    $container->set('queue' , $this->createMock(QueueFactory::class));
     \Drupal::setContainer($container);
 
     $this->formObject = NodeRevisionDeleteConfigForm::create($container);

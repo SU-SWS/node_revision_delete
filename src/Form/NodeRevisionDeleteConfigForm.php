@@ -6,6 +6,8 @@ use Drupal\Core\Config\ConfigFactoryInterface;
 use Drupal\Core\Entity\EntityTypeBundleInfoInterface;
 use Drupal\Core\Form\ConfigFormBase;
 use Drupal\Core\Form\FormStateInterface;
+use Drupal\Core\Queue\QueueFactory;
+use Drupal\Core\Queue\QueueWorkerManagerInterface;
 use Drupal\node_revision_delete\RevisionCleanupInterface;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 
@@ -29,23 +31,32 @@ class NodeRevisionDeleteConfigForm extends ConfigFormBase {
   protected $revisionCleanup;
 
   /**
+   * Cron queue service.
+   *
+   * @var \Drupal\Core\Queue\QueueInterface
+   */
+  protected $queue;
+
+  /**
    * {@inheritdoc}
    */
   public static function create(ContainerInterface $container) {
     return new static(
       $container->get('config.factory'),
       $container->get('entity_type.bundle.info'),
-      $container->get('node_revision_delete')
+      $container->get('node_revision_delete'),
+      $container->get('queue')
     );
   }
 
   /**
    * {@inheritdoc}
    */
-  public function __construct(ConfigFactoryInterface $config_factory, EntityTypeBundleInfoInterface $bundle_info, RevisionCleanupInterface $revision_cleanup) {
+  public function __construct(ConfigFactoryInterface $config_factory, EntityTypeBundleInfoInterface $bundle_info, RevisionCleanupInterface $revision_cleanup, QueueFactory $queue_factory) {
     parent::__construct($config_factory);
     $this->bundleInfo = $bundle_info;
     $this->revisionCleanup = $revision_cleanup;
+    $this->queue = $queue_factory->get('node_revision_delete');
   }
 
   /**
@@ -125,6 +136,11 @@ class NodeRevisionDeleteConfigForm extends ConfigFormBase {
         ],
       ];
     }
+
+    $form['delete_now'] = [
+      '#title' => $this->t('Delete revisions now'),
+      '#type' => 'checkbox',
+    ];
     return $form;
   }
 
@@ -169,6 +185,37 @@ class NodeRevisionDeleteConfigForm extends ConfigFormBase {
     $this->messenger()->addStatus($this->t('Settings saved successfully.'));
 
     $this->revisionCleanup->queueAllRevisions();
+
+    if ($form_state->getValue('delete_now')) {
+      $batch = [
+        'title' => $this->t('Deleting Revisions'),
+        'operations' => [],
+      ];
+
+      while ($item = $this->queue->claimItem()) {
+        $batch['operations'][] = [
+          [self::class, 'batchDeleteRevisions'],
+          [$item->data->vid],
+        ];
+        $this->queue->deleteItem($item);
+      }
+
+      batch_set($batch);
+    }
+  }
+
+  /**
+   * Delete revisions in batch callback.
+   *
+   * @param int $vid
+   *   Revision id.
+   */
+  public static function batchDeleteRevisions($vid) {
+    try {
+      \Drupal::entityTypeManager()->getStorage('node')->deleteRevision($vid);
+    }catch (\Exception $e){
+      // Unable to delete revision.
+    }
   }
 
 }

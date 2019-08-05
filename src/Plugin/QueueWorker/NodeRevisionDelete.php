@@ -43,6 +43,7 @@ class NodeRevisionDelete extends QueueWorkerBase implements ContainerFactoryPlug
   public function __construct(array $configuration, $plugin_id, $plugin_definition, RevisionCleanupInterface $revision_cleanup) {
     parent::__construct($configuration, $plugin_id, $plugin_definition);
     $this->revisionCleanup = $revision_cleanup;
+
   }
 
   /**
